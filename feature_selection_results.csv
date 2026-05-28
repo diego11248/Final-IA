@@ -1,0 +1,4 @@
+step,added_feature,features,n_features,f1,accuracy,precision,recall
+0,(baseline OHLCV),"Open, High, Low, Close, Volume",5,0.48598921186662314,0.490148966842864,0.5040422507414033,0.490148966842864
+1,Return_Lag_5,"Open, High, Low, Close, Volume, Return_Lag_5",6,0.5171610695067104,0.5160980297933686,0.5206512471990998,0.5160980297933686
+2,BB_Upper,"Open, High, Low, Close, Volume, Return_Lag_5, BB_Upper",7,0.532505685909658,0.5314752522825564,0.5359374308454409,0.5314752522825564
