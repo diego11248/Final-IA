@@ -20,8 +20,6 @@ class LSTMModel(nn.Module):
         self.dropout = nn.Dropout(dropout)
         # Capa densa de salida
         self.fc = nn.Linear(hidden_dim, output_dim)
-        # Activación Sigmoid integrada
-        self.sigmoid = nn.Sigmoid()
         
     def forward(self, x):
         # x shape: (batch_size, timesteps, features)
@@ -30,5 +28,4 @@ class LSTMModel(nn.Module):
         # Tomamos solo el output del último timestep (proceso secuencial terminado)
         out = out[:, -1, :] 
         out = self.dropout(out)
-        out = self.fc(out)
-        return self.sigmoid(out)
+        return self.fc(out)

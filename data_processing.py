@@ -5,15 +5,31 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 from features import calculate_obv, calculate_lagged_returns, calculate_rolling_volatility
+import concurrent.futures
 
-# Mapping target stocks to their corresponding sector ETFs
-SECTOR_MAP = {
-    "AAPL": "XLK", "MSFT": "XLK", "NVDA": "XLK", "AMD": "XLK",
-    "JPM": "XLF", "BAC": "XLF", "WFC": "XLF",
-    "AMZN": "XLY", "TSLA": "XLY", "HD": "XLY",
-    "JNJ": "XLV", "PFE": "XLV", "LLY": "XLV",
-    "XOM": "XLE", "CVX": "XLE",
+# Mapping sector names to their corresponding SPDR ETF
+SECTOR_ETF_MAP = {
+    "Technology": "XLK",
+    "Financial Services": "XLF",
+    "Consumer Cyclical": "XLY",
+    "Healthcare": "XLV",
+    "Energy": "XLE",
+    "Communication Services": "XLC",
+    "Industrials": "XLI",
+    "Consumer Defensive": "XLP",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Basic Materials": "XLB"
 }
+
+def get_ticker_sector_etf(ticker):
+    try:
+        info = yf.Ticker(ticker).info
+        sector = info.get('sector')
+        return ticker.upper(), SECTOR_ETF_MAP.get(sector, "SPY")
+    except Exception as e:
+        # Algunos símbolos como índices o delisted tickers pueden fallar
+        return ticker.upper(), "SPY"
 
 def prepare_data(tickers, start_date, end_date, n_steps=30, batch_size=32):
     """
@@ -24,6 +40,11 @@ def prepare_data(tickers, start_date, end_date, n_steps=30, batch_size=32):
     if isinstance(tickers, str):
         tickers = [tickers]
         
+    print(f"Obteniendo sectores de forma dinámica para {len(tickers)} tickers...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        sector_tuples = list(executor.map(get_ticker_sector_etf, tickers))
+    sector_map = dict(sector_tuples)
+    
     print(f"Descargando datos históricos para {len(tickers)} tickers...")
     # Descarga masiva en un solo llamado
     multi_df = yf.download(tickers, start=start_date, end=end_date, group_by='ticker')
@@ -34,7 +55,7 @@ def prepare_data(tickers, start_date, end_date, n_steps=30, batch_size=32):
             multi_df.columns = pd.MultiIndex.from_product([[tickers[0]], multi_df.columns])
 
     # Determinar qué ETFs de sector necesitamos descargar
-    sectors_needed = list(set(SECTOR_MAP.get(t.upper(), "SPY") for t in tickers))
+    sectors_needed = list(set(sector_map.get(t.upper(), "SPY") for t in tickers))
     external_tickers = sectors_needed + ["^VIX"]
     
     print(f"Descargando datos de sectores y volatilidad: {external_tickers}...")
@@ -60,7 +81,7 @@ def prepare_data(tickers, start_date, end_date, n_steps=30, batch_size=32):
             continue
             
         # Obtener sector ETF
-        sector_ticker = SECTOR_MAP.get(ticker, "SPY")
+        sector_ticker = sector_map.get(ticker, "SPY")
         
         # Extraer Close de Sector ETF
         sector_close = pd.Series(0.0, index=df.index)

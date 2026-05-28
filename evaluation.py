@@ -11,7 +11,7 @@ def train_and_evaluate(model, name_model, train_loader, test_loader, y_true_test
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
     
-    criterion = nn.BCELoss() # Función de pérdida binaria
+    criterion = nn.BCEWithLogitsLoss() # Función de pérdida binaria con logits
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     # Scheduler: Reduce el learning rate a la mitad cada 5 épocas
@@ -53,7 +53,8 @@ def train_and_evaluate(model, name_model, train_loader, test_loader, y_true_test
         for X_batch, _ in test_loader:
             X_batch = X_batch.to(device)
             outputs = model(X_batch)
-            all_outputs.append(outputs.cpu().numpy())
+            probs = torch.sigmoid(outputs) # Aplicar sigmoide para obtener probabilidades
+            all_outputs.append(probs.cpu().numpy())
             
     y_raw = np.vstack(all_outputs)
     

@@ -12,14 +12,22 @@ def main():
         "JPM", "BAC", "WFC",            
         "AMZN", "TSLA", "HD",           
         "JNJ", "PFE", "LLY",            
-        "XOM", "CVX"                    
+        "XOM", "CVX",
+        "INTC", "CSCO", "ORCL", "ADBE",
+        "GOOGL", "FB", "AMZN", "NFLX",
+        "VZ", "T", "TMUS", "CMCSA",
+        "KO", "PEP", "MCD", "NKE",
+        "PG", "WMT", "COST", "SBUX",
+        "CAT", "BA", "GE", "MMM",
+        "AXP", "MA", "V", "PYPL",
+        "ZM", "PINS", "SNAP", "TWTR"
     ]
     
     START_DATE = "2020-01-01"
     END_DATE = "2025-12-31"
     TIMESTEPS = 30
     BATCH_SIZE = 128  # Aumentado para manejar mayor volumen de datos de manera eficiente
-    EPOCHS =  100  # Ajustado para pruebas iniciales en múltiples tickers
+    EPOCHS =  30  # Ajustado para pruebas iniciales en múltiples tickers
     
     # 1. Carga y preprocesamiento de datos
     print(" Descargando y preparando DataLoaders de PyTorch...")
@@ -32,8 +40,8 @@ def main():
     )
     
     # 2. Inicialización y entrenamiento de la LSTM
-    lstm_net = LSTMModel(input_dim=features)
-    train_and_evaluate(lstm_net, "Modelo LSTM (PyTorch)", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
+    #lstm_net = LSTMModel(input_dim=features)
+    #train_and_evaluate(lstm_net, "Modelo LSTM (PyTorch)", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
     
     # 3. Inicialización y entrenamiento del Transformer
     transformer_net = TransformerModel(input_dim=features, timesteps=timesteps)

@@ -24,7 +24,6 @@ class TransformerModel(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(d_model, 1)
-        self.sigmoid = nn.Sigmoid()
         
     def forward(self, x):
         # Proyección y suma de posiciones
@@ -37,5 +36,4 @@ class TransformerModel(nn.Module):
         x = x.mean(dim=1)
         
         x = self.dropout(x)
-        out = self.fc(x)
-        return self.sigmoid(out)
+        return self.fc(x)
