@@ -1,26 +1,26 @@
 import pickle
 import torch
 from data_processing import download_and_compute_features, create_dataloaders
-from lstm_model import LSTMModel
-from transformer_model import TransformerModel
+from lstm_model import FinBERTLSTMModel
+from finbert_model import FineTunedFinBERT
 from evaluation import train_and_evaluate
 
 def main():
     # Configuración de hiperparámetros
     TICKERS = [
         "AAPL", "MSFT", "NVDA", "AMD",  
-        "JPM", "BAC", "WFC",            
-        "AMZN", "TSLA", "HD",           
-        "JNJ", "PFE", "LLY",            
-        "XOM", "CVX",
-        "INTC", "CSCO", "ORCL", "ADBE",
-        "GOOGL", "FB", "AMZN", "NFLX",
-        "VZ", "T", "TMUS", "CMCSA",
-        "KO", "PEP", "MCD", "NKE",
-        "PG", "WMT", "COST", "SBUX",
-        "CAT", "BA", "GE", "MMM",
-        "AXP", "MA", "V", "PYPL",
-        "ZM", "PINS", "SNAP"
+        #"JPM", "BAC", "WFC",            
+        #"AMZN", "TSLA", "HD",           
+        #"JNJ", "PFE", "LLY",            
+        #"XOM", "CVX",
+        #"INTC", "CSCO", "ORCL", "ADBE",
+        #"GOOGL", "FB", "AMZN", "NFLX",
+        #"VZ", "T", "TMUS", "CMCSA",
+        #"KO", "PEP", "MCD", "NKE",
+        #"PG", "WMT", "COST", "SBUX",
+        #"CAT", "BA", "GE", "MMM",
+        #"AXP", "MA", "V", "PYPL",
+        #"ZM", "PINS", "SNAP"
     ]
     
     START_DATE = "2020-01-01"
@@ -71,13 +71,13 @@ def main():
             print("Datos insuficientes para este fold. Saltando...")
             continue
             
-        # Evaluar LSTM en este fold
-        lstm_net = LSTMModel(input_dim=features)
-        train_and_evaluate(lstm_net, f"LSTM (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
+        # Evaluar FinBERT + LSTM en este fold
+        finbert_lstm_net = FinBERTLSTMModel(input_dim=features)
+        train_and_evaluate(finbert_lstm_net, f"FinBERT+LSTM (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
         
-        # Evaluar Transformer en este fold
-        transformer_net = TransformerModel(input_dim=features, timesteps=timesteps)
-        train_and_evaluate(transformer_net, f"Transformer (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
+        # Evaluar FineTuned FinBERT en este fold
+        finetuned_finbert = FineTunedFinBERT(input_dim=features)
+        train_and_evaluate(finetuned_finbert, f"FineTuned FinBERT (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.001)
 
     # 3. Entrenamiento Final de Producción
     print("\n" + "="*50)
@@ -110,17 +110,17 @@ def main():
     print(">>> Scalers (MinMaxScaler) guardados exitosamente en 'scalers.pkl' <<<")
     
     if train_loader and test_loader:
-        print("\nEntrenando modelo LSTM final...")
-        final_lstm = LSTMModel(input_dim=features)
-        train_and_evaluate(final_lstm, "LSTM (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.01)
-        torch.save(final_lstm.state_dict(), "lstm_model.pt")
-        print(">>> Modelo LSTM guardado en 'lstm_model.pt' <<<")
+        print("\nEntrenando modelo FinBERT + LSTM final...")
+        final_finbert_lstm = FinBERTLSTMModel(input_dim=features)
+        train_and_evaluate(final_finbert_lstm, "FinBERT+LSTM (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.01)
+        torch.save(final_finbert_lstm.state_dict(), "finbert_lstm_model.pt")
+        print(">>> Modelo FinBERT+LSTM guardado en 'finbert_lstm_model.pt' <<<")
         
-        print("\nEntrenando modelo Transformer final...")
-        final_transformer = TransformerModel(input_dim=features, timesteps=timesteps)
-        train_and_evaluate(final_transformer, "Transformer (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.01)
-        torch.save(final_transformer.state_dict(), "transformer_model.pt")
-        print(">>> Modelo Transformer guardado en 'transformer_model.pt' <<<")
+        print("\nEntrenando modelo FineTuned FinBERT final...")
+        final_finetuned_finbert = FineTunedFinBERT(input_dim=features)
+        train_and_evaluate(final_finetuned_finbert, "FineTuned FinBERT (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.001)
+        torch.save(final_finetuned_finbert.state_dict(), "finetuned_finbert_model.pt")
+        print(">>> Modelo FineTuned FinBERT guardado en 'finetuned_finbert_model.pt' <<<")
     else:
         print("Error: No se pudieron generar los dataloaders para la fase final.")
 

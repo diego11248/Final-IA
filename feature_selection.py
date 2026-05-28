@@ -32,10 +32,6 @@ from features import compute_all_technical_features
 from transformer_model import TransformerModel
 
 
-# ═══════════════════════════════════════════════════════
-#  CONFIGURATION
-# ═══════════════════════════════════════════════════════
-
 # Representative subset of tickers (diverse sectors, keeps runtime manageable)
 SELECTION_TICKERS = [
     "AAPL", "MSFT",   # Tech
@@ -70,7 +66,7 @@ SECTOR_ETF_MAP = {
     "Basic Materials":        "XLB",
 }
 
-# ── Feature Groups ────────────────────────────────────
+
 # Base features are always included (OHLCV)
 BASE_FEATURES = ['Open', 'High', 'Low', 'Close', 'Volume']
 
@@ -111,9 +107,6 @@ CANDIDATE_FEATURES = [
 ]
 
 
-# ═══════════════════════════════════════════════════════
-#  DATA PREPARATION (feature-selection-aware)
-# ═══════════════════════════════════════════════════════
 
 def _get_sector_etf(ticker):
     try:
@@ -287,9 +280,6 @@ def build_dataloaders(all_ticker_data, feature_cols):
     return train_loader, test_loader, y_test
 
 
-# ═══════════════════════════════════════════════════════
-#  QUICK TRAIN & EVALUATE (lightweight for selection)
-# ═══════════════════════════════════════════════════════
 
 def quick_train_evaluate(feature_cols, all_ticker_data, device):
     """
@@ -344,10 +334,6 @@ def quick_train_evaluate(feature_cols, all_ticker_data, device):
 
     return {'f1': f1, 'accuracy': acc, 'precision': prec, 'recall': rec}
 
-
-# ═══════════════════════════════════════════════════════
-#  FORWARD FEATURE SELECTION
-# ═══════════════════════════════════════════════════════
 
 def forward_selection(all_ticker_data, device):
     """
@@ -438,9 +424,7 @@ def forward_selection(all_ticker_data, device):
     return selected, history
 
 
-# ═══════════════════════════════════════════════════════
-#  ABLATION STUDY (bonus: test removing each feature)
-# ═══════════════════════════════════════════════════════
+
 
 def ablation_study(best_features, all_ticker_data, device):
     """
@@ -481,11 +465,6 @@ def ablation_study(best_features, all_ticker_data, device):
     # Sort by importance (biggest F1 drop = most important)
     ablation_results.sort(key=lambda x: x['f1_drop'], reverse=True)
     return ablation_results
-
-
-# ═══════════════════════════════════════════════════════
-#  MAIN
-# ═══════════════════════════════════════════════════════
 
 def main():
     start_time = time.time()

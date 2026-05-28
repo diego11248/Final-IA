@@ -2,9 +2,6 @@ import pandas as pd
 import numpy as np
 
 
-# ═══════════════════════════════════════════════════════
-#  EXISTING INDICATORS
-# ═══════════════════════════════════════════════════════
 
 def calculate_obv(df):
     """
@@ -35,9 +32,6 @@ def calculate_rolling_volatility(df, window=10):
     return rolling_vol
 
 
-# ═══════════════════════════════════════════════════════
-#  NEW TECHNICAL INDICATORS
-# ═══════════════════════════════════════════════════════
 
 def calculate_rsi(df, period=14):
     """
@@ -192,10 +186,6 @@ def calculate_return_lag(df, lag=10):
     """
     return df['Close'].pct_change(periods=lag)
 
-
-# ═══════════════════════════════════════════════════════
-#  CONVENIENCE: Compute all indicators at once
-# ═══════════════════════════════════════════════════════
 
 def compute_all_technical_features(df):
     """

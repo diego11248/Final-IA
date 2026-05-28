@@ -15,7 +15,7 @@ def train_and_evaluate(model, name_model, train_loader, test_loader, y_true_test
     optimizer = optim.Adam(model.parameters(), lr=lr)
     
     # Scheduler: Reduce el learning rate a la mitad cada 5 épocas
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2)
     
     # Bucle de Entrenamiento
     for epoch in range(epochs):

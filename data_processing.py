@@ -5,6 +5,67 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 from features import calculate_lagged_returns, calculate_bollinger_bands
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch.nn.functional as F
+
+# Cargar FinBERT (solo una vez para ahorrar recursos)
+# Utilizamos try/except por si el modelo no está descargado y falla la red
+try:
+    print("Cargando modelo FinBERT...")
+    finbert_tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+    finbert_model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+    finbert_model.eval()
+except Exception as e:
+    print(f"Error cargando FinBERT: {e}")
+    finbert_tokenizer = None
+    finbert_model = None
+
+def generate_synthetic_news(df, ticker):
+    """
+    Genera noticias sintéticas basadas en el rendimiento diario para simular 
+    una fuente de texto (ya que yfinance no provee noticias históricas completas).
+    En producción, reemplazar esto con una llamada a NewsAPI, Finnhub, etc.
+    """
+    news_list = []
+    returns = df['Close'].pct_change()
+    
+    for ret in returns:
+        if pd.isna(ret):
+            news_list.append(f"Trading started for {ticker}.")
+        elif ret > 0.02:
+            news_list.append(f"{ticker} surges today on strong positive momentum and market optimism.")
+        elif ret > 0.0:
+            news_list.append(f"{ticker} closes slightly higher in calm trading session.")
+        elif ret < -0.02:
+            news_list.append(f"{ticker} drops significantly amidst market sell-off and negative sentiment.")
+        else:
+            news_list.append(f"{ticker} edges lower as investors remain cautious.")
+            
+    return news_list
+
+def get_finbert_sentiment(texts, batch_size=32):
+    """
+    Extrae probabilidades de sentimiento (Positivo, Negativo, Neutral) usando FinBERT.
+    """
+    if finbert_model is None or finbert_tokenizer is None:
+        # Fallback si no carga el modelo
+        return np.zeros((len(texts), 3))
+        
+    all_probs = []
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i+batch_size]
+        inputs = finbert_tokenizer(batch_texts, padding=True, truncation=True, max_length=64, return_tensors="pt")
+        
+        with torch.no_grad():
+            outputs = finbert_model(**inputs)
+            logits = outputs.logits
+            probs = F.softmax(logits, dim=1)
+            all_probs.append(probs.numpy())
+            
+    if len(all_probs) == 0:
+        return np.zeros((0, 3))
+        
+    return np.concatenate(all_probs, axis=0)
 
 def download_and_compute_features(tickers, start_date, end_date):
     """
@@ -49,6 +110,19 @@ def download_and_compute_features(tickers, start_date, end_date):
         data_t = data_t.join(lagged_returns)
         data_t['BB_Upper'] = bb_df['BB_Upper']
         
+        # --- NUEVO: Integración FinBERT ---
+        # 1. Generar textos (o descargar con API)
+        news_texts = generate_synthetic_news(df, ticker)
+        
+        # 2. Extraer embeddings/sentimiento (3 dimensiones: pos, neg, neu)
+        print(f"Calculando sentimiento FinBERT para {ticker} ({len(news_texts)} días)...")
+        sentiment_probs = get_finbert_sentiment(news_texts)
+        
+        # 3. Añadir características de texto
+        data_t['FinBERT_Pos'] = sentiment_probs[:, 0]
+        data_t['FinBERT_Neg'] = sentiment_probs[:, 1]
+        data_t['FinBERT_Neu'] = sentiment_probs[:, 2]
+        
         # Alinear y rellenar valores faltantes
         data_t = data_t.ffill().bfill()
         
@@ -79,7 +153,8 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
     """
     feature_cols = [
         'Open', 'High', 'Low', 'Close', 'Volume',
-        'Return_Lag_5', 'BB_Upper'
+        'Return_Lag_5', 'BB_Upper',
+        'FinBERT_Pos', 'FinBERT_Neg', 'FinBERT_Neu'
     ]
     
     X_train_all, y_train_all = [], []
