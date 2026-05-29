@@ -1,4 +1,4 @@
-# Proyecto Final IA: Comparacion de LSTM vs. Transformers para la Prediccion de Acciones
+# Proyecto Final IA: Comparacion de LSTM vs. Transformers para la Prediccion de Acciones - Diego G, Juanp Pablo P, John Brainer R, Emanuel H
 
 Este proyecto analiza el funcionamiento y la efectividad de usar redes neuronales recurrentes (LSTM) frente a modelos basados en Transformers (FinBERT) para predecir el comportamiento de una accion en terminos binarios (subida o bajada).
 
