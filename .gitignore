@@ -119,3 +119,6 @@ env/
 *.njsproj
 *.sln
 *.sw?
+
+# PyTorch models
+*.pt

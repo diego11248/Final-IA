@@ -45,22 +45,25 @@ def main():
     print("="*50)
     
     folds = [
-        {"train_start": "2020-01-01", "train_end": "2022-12-31", "test_start": "2023-01-01", "test_end": "2023-12-31"},
-        {"train_start": "2020-01-01", "train_end": "2023-12-31", "test_start": "2024-01-01", "test_end": "2024-12-31"},
-        {"train_start": "2020-01-01", "train_end": "2024-12-31", "test_start": "2025-01-01", "test_end": "2025-12-31"}
+        {"train_start": "2020-01-01", "train_end": "2022-06-30", "val_start": "2022-07-01", "val_end": "2022-12-31", "test_start": "2023-01-01", "test_end": "2023-12-31"},
+        {"train_start": "2020-01-01", "train_end": "2023-06-30", "val_start": "2023-07-01", "val_end": "2023-12-31", "test_start": "2024-01-01", "test_end": "2024-12-31"},
+        {"train_start": "2020-01-01", "train_end": "2024-06-30", "val_start": "2024-07-01", "val_end": "2024-12-31", "test_start": "2025-01-01", "test_end": "2025-12-31"}
     ]
     
     for i, fold in enumerate(folds, 1):
         print(f"\n{'─'*50}")
         print(f"  FOLD {i}")
         print(f"  Train: {fold['train_start']} -> {fold['train_end']}")
+        print(f"  Val:   {fold['val_start']} -> {fold['val_end']}")
         print(f"  Test:  {fold['test_start']} -> {fold['test_end']}")
         print(f"{'─'*50}")
         
-        train_loader, test_loader, timesteps, features, y_test, _ = create_dataloaders(
+        train_loader, val_loader, test_loader, timesteps, features, y_test, _ = create_dataloaders(
             all_ticker_data,
             train_start=fold["train_start"],
             train_end=fold["train_end"],
+            val_start=fold["val_start"],
+            val_end=fold["val_end"],
             test_start=fold["test_start"],
             test_end=fold["test_end"],
             n_steps=TIMESTEPS,
@@ -73,31 +76,35 @@ def main():
             
         # Evaluar FinBERT + LSTM en este fold
         finbert_lstm_net = FinBERTLSTMModel(input_dim=features)
-        train_and_evaluate(finbert_lstm_net, f"FinBERT+LSTM (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
+        train_and_evaluate(finbert_lstm_net, f"FinBERT+LSTM (Fold {i})", train_loader, val_loader, test_loader, y_test, epochs=EPOCHS, lr=0.01)
         
         # Evaluar FineTuned FinBERT en este fold
         finetuned_finbert = FineTunedFinBERT(input_dim=features)
-        train_and_evaluate(finetuned_finbert, f"FineTuned FinBERT (Fold {i})", train_loader, test_loader, y_test, epochs=EPOCHS, lr=0.001)
+        train_and_evaluate(finetuned_finbert, f"FineTuned FinBERT (Fold {i})", train_loader, val_loader, test_loader, y_test, epochs=EPOCHS, lr=0.001)
 
     # 3. Entrenamiento Final de Producción
     print("\n" + "="*50)
     print("   [FASE 3] ENTRENAMIENTO FINAL (PRODUCCIÓN)")
     print("="*50)
     
-    # Para la fase de producción, usamos el máximo posible de datos de entrenamiento (hasta Sept 2025)
-    # y los últimos 3 meses como validación final (para determinar el umbral de confianza).
+    # Para la fase de producción, usamos el máximo posible de datos de entrenamiento.
     prod_train_start = "2020-01-01"
-    prod_train_end = "2025-09-30"
+    prod_train_end = "2025-06-30"
+    prod_val_start = "2025-07-01"
+    prod_val_end = "2025-09-30"
     prod_test_start = "2025-10-01"
     prod_test_end = "2025-12-31"
     
     print(f"Train Producción: {prod_train_start} -> {prod_train_end}")
-    print(f"Test  Producción: {prod_test_start} -> {prod_test_end}\n")
+    print(f"Val Producción:   {prod_val_start} -> {prod_val_end}")
+    print(f"Test Producción:  {prod_test_start} -> {prod_test_end}\n")
     
-    train_loader, test_loader, timesteps, features, y_test, scaler_dict = create_dataloaders(
+    train_loader, val_loader, test_loader, timesteps, features, y_test, scaler_dict = create_dataloaders(
         all_ticker_data,
         train_start=prod_train_start,
         train_end=prod_train_end,
+        val_start=prod_val_start,
+        val_end=prod_val_end,
         test_start=prod_test_start,
         test_end=prod_test_end,
         n_steps=TIMESTEPS,
@@ -112,13 +119,13 @@ def main():
     if train_loader and test_loader:
         print("\nEntrenando modelo FinBERT + LSTM final...")
         final_finbert_lstm = FinBERTLSTMModel(input_dim=features)
-        train_and_evaluate(final_finbert_lstm, "FinBERT+LSTM (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.01)
+        train_and_evaluate(final_finbert_lstm, "FinBERT+LSTM (FINAL)", train_loader, val_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.01)
         torch.save(final_finbert_lstm.state_dict(), "finbert_lstm_model.pt")
         print(">>> Modelo FinBERT+LSTM guardado en 'finbert_lstm_model.pt' <<<")
         
         print("\nEntrenando modelo FineTuned FinBERT final...")
         final_finetuned_finbert = FineTunedFinBERT(input_dim=features)
-        train_and_evaluate(final_finetuned_finbert, "FineTuned FinBERT (FINAL)", train_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.001)
+        train_and_evaluate(final_finetuned_finbert, "FineTuned FinBERT (FINAL)", train_loader, val_loader, test_loader, y_test, epochs=EPOCHS+5, lr=0.001)
         torch.save(final_finetuned_finbert.state_dict(), "finetuned_finbert_model.pt")
         print(">>> Modelo FineTuned FinBERT guardado en 'finetuned_finbert_model.pt' <<<")
     else:

@@ -22,19 +22,13 @@ import torch
 from sklearn.preprocessing import MinMaxScaler
 
 from features import calculate_lagged_returns, calculate_bollinger_bands
-from transformer_model import TransformerModel
-from lstm_model import LSTMModel
-
+from finbert_model import FineTunedFinBERT
+from lstm_model import FinBERTLSTMModel
+from data_processing import generate_synthetic_news, get_finbert_sentiment
 
 TIMESTEPS            = 30
-D_MODEL              = 128
-NUM_HEADS            = 4
-NUM_LAYERS           = 3
-DROPOUT              = 0.2
-TRANSFORMER_PATH     = "transformer_model.pt"
-LSTM_PATH            = "lstm_model.pt"
-LSTM_HIDDEN_DIM      = 128
-LSTM_NUM_LAYERS      = 2
+FINBERT_LSTM_PATH    = "finbert_lstm_model.pt"
+FINETUNED_FINBERT_PATH = "finetuned_finbert_model.pt"
 
 SECTOR_ETF_MAP = {
     "Technology":             "XLK",
@@ -52,9 +46,10 @@ SECTOR_ETF_MAP = {
 
 FEATURE_COLS = [
     'Open', 'High', 'Low', 'Close', 'Volume',
-    'Return_Lag_5', 'BB_Upper'
+    'Return_Lag_5', 'BB_Upper',
+    'FinBERT_Pos', 'FinBERT_Neg', 'FinBERT_Neu'
 ]
-NUM_FEATURES = len(FEATURE_COLS)  # 12
+NUM_FEATURES = len(FEATURE_COLS)  # 10
 
 
 # ─────────────────────────────────────────────
@@ -123,10 +118,18 @@ def build_feature_window(ticker: str, n_steps: int = TIMESTEPS) -> np.ndarray:
     lagged       = calculate_lagged_returns(df, lags=[5])
     bb_df        = calculate_bollinger_bands(df)
 
+    # ── Sentimiento FinBERT ───────────────────
+    print(f"  › Generando noticias y sentimiento FinBERT...")
+    news_texts = generate_synthetic_news(df, ticker)
+    sentiment_probs = get_finbert_sentiment(news_texts)
+
     # ── Construir DataFrame de características ─
     data_t = df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
     data_t = data_t.join(lagged)
     data_t['BB_Upper']  = bb_df['BB_Upper']
+    data_t['FinBERT_Pos'] = sentiment_probs[:, 0]
+    data_t['FinBERT_Neg'] = sentiment_probs[:, 1]
+    data_t['FinBERT_Neu'] = sentiment_probs[:, 2]
 
     data_t = data_t[FEATURE_COLS].ffill().bfill().dropna()
 
@@ -196,44 +199,36 @@ def predict(ticker: str) -> None:
 
     results = {}  # {model_name: probability}
 
-    # ── 2. Transformer ────────────────────────
+    # ── 2. FinBERT + LSTM ────────────────────────
     print(f"\n[2/3] Cargando modelos...")
     try:
-        transformer = TransformerModel(
-            input_dim=NUM_FEATURES, timesteps=TIMESTEPS,
-            d_model=D_MODEL, num_heads=NUM_HEADS,
-            num_layers=NUM_LAYERS, dropout=DROPOUT,
-        )
-        state = torch.load(TRANSFORMER_PATH, map_location=device, weights_only=True)
-        transformer.load_state_dict(state)
-        transformer.to(device).eval()
+        finbert_lstm = FinBERTLSTMModel(input_dim=NUM_FEATURES)
+        state = torch.load(FINBERT_LSTM_PATH, map_location=device, weights_only=True)
+        finbert_lstm.load_state_dict(state)
+        finbert_lstm.to(device).eval()
         with torch.no_grad():
-            prob_t = torch.sigmoid(transformer(X_tensor)).item()
-        results["Transformer"] = prob_t
-        print(f"    Transformer cargado desde '{TRANSFORMER_PATH}'")
+            prob_l = torch.sigmoid(finbert_lstm(X_tensor)).item()
+        results["FinBERT+LSTM"] = prob_l
+        print(f"    FinBERT+LSTM cargado desde '{FINBERT_LSTM_PATH}'")
     except FileNotFoundError:
-        print(f"    Transformer no encontrado ('{TRANSFORMER_PATH}') — omitido")
+        print(f"    FinBERT+LSTM no encontrado ('{FINBERT_LSTM_PATH}') — omitido")
     except Exception as e:
-        print(f"    Error cargando Transformer: {e} — omitido")
+        print(f"    Error cargando FinBERT+LSTM: {e} — omitido")
 
-    # ── 3. LSTM ───────────────────────────────
+    # ── 3. FineTuned FinBERT ───────────────────────────────
     try:
-        lstm = LSTMModel(
-            input_dim=NUM_FEATURES,
-            hidden_dim=LSTM_HIDDEN_DIM,
-            num_layers=LSTM_NUM_LAYERS,
-        )
-        state = torch.load(LSTM_PATH, map_location=device, weights_only=True)
-        lstm.load_state_dict(state)
-        lstm.to(device).eval()
+        finetuned_finbert = FineTunedFinBERT(input_dim=NUM_FEATURES)
+        state = torch.load(FINETUNED_FINBERT_PATH, map_location=device, weights_only=True)
+        finetuned_finbert.load_state_dict(state)
+        finetuned_finbert.to(device).eval()
         with torch.no_grad():
-            prob_l = torch.sigmoid(lstm(X_tensor)).item()
-        results["LSTM"] = prob_l
-        print(f"    LSTM cargado desde '{LSTM_PATH}'")
+            prob_f = torch.sigmoid(finetuned_finbert(X_tensor)).item()
+        results["FineTuned FinBERT"] = prob_f
+        print(f"    FineTuned FinBERT cargado desde '{FINETUNED_FINBERT_PATH}'")
     except FileNotFoundError:
-        print(f"    LSTM no encontrado ('{LSTM_PATH}') — omitido")
+        print(f"    FineTuned FinBERT no encontrado ('{FINETUNED_FINBERT_PATH}') — omitido")
     except Exception as e:
-        print(f"    Error cargando LSTM: {e} — omitido")
+        print(f"    Error cargando FineTuned FinBERT: {e} — omitido")
 
     if not results:
         print("\n  No se pudo cargar ningun modelo. Ejecuta primero: python main.py")

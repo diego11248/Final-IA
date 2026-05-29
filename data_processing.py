@@ -146,10 +146,11 @@ def download_and_compute_features(tickers, start_date, end_date):
     return all_ticker_data
 
 
-def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None, test_end=None, n_steps=30, batch_size=128):
+def create_dataloaders(all_ticker_data, train_start, train_end, val_start=None, val_end=None, test_start=None, test_end=None, n_steps=30, batch_size=128):
     """
-    Filtra los datos por fechas, ajusta el scaler SOLO en los datos de entrenamiento
-    (previniendo data leakage), y crea los DataLoaders de secuencias temporales.
+    Filtra los datos por fechas (Train, Val, Test explícitos).
+    Ajusta el scaler SOLO en los datos de entrenamiento (previniendo data leakage), 
+    y crea los DataLoaders de secuencias temporales.
     """
     feature_cols = [
         'Open', 'High', 'Low', 'Close', 'Volume',
@@ -158,6 +159,7 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
     ]
     
     X_train_all, y_train_all = [], []
+    X_val_all, y_val_all = [], []
     X_test_all, y_test_all = [], []
     y_test_eval_all = []
     
@@ -186,6 +188,25 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
         if len(X_t_train) > 0:
             X_train_all.append(np.array(X_t_train, dtype=np.float32))
             y_train_all.append(np.array(y_t_train, dtype=np.float32).reshape(-1, 1))
+            
+        # Transformar Val y crear secuencias
+        if val_start and val_end:
+            val_mask = (data_t.index >= val_start) & (data_t.index <= val_end)
+            if val_mask.any():
+                first_val_idx = np.where(val_mask)[0][0]
+                val_start_idx = max(0, first_val_idx - n_steps)
+                val_df_extended = data_t.iloc[val_start_idx : np.where(val_mask)[0][-1] + 1]
+                
+                if len(val_df_extended) >= n_steps + 1:
+                    val_scaled = scaler.transform(val_df_extended[feature_cols])
+                    X_t_val, y_t_val = [], []
+                    for i in range(len(val_scaled) - n_steps):
+                        X_t_val.append(val_scaled[i : i + n_steps])
+                        y_t_val.append(val_df_extended['Target'].iloc[i + n_steps])
+                    
+                    if len(X_t_val) > 0:
+                        X_val_all.append(np.array(X_t_val, dtype=np.float32))
+                        y_val_all.append(np.array(y_t_val, dtype=np.float32).reshape(-1, 1))
             
         # 3. Transformar Test (si existe) y crear secuencias
         if test_start and test_end:
@@ -216,7 +237,7 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
                 y_test_eval_all.append(np.array(y_t_test, dtype=np.float32).reshape(-1, 1))
 
     if not X_train_all:
-        return None, None, n_steps, len(feature_cols), None, scaler_dict
+        return None, None, None, n_steps, len(feature_cols), None, scaler_dict
 
     # Concatenar todos los conjuntos individuales
     X_train = np.concatenate(X_train_all, axis=0)
@@ -226,6 +247,15 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
     y_train_t = torch.tensor(y_train)
     train_dataset = TensorDataset(X_train_t, y_train_t)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    
+    val_loader = None
+    if X_val_all:
+        X_val = np.concatenate(X_val_all, axis=0)
+        y_val = np.concatenate(y_val_all, axis=0)
+        X_val_t = torch.tensor(X_val)
+        y_val_t = torch.tensor(y_val)
+        val_dataset = TensorDataset(X_val_t, y_val_t)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
     test_loader = None
     y_test_eval = None
@@ -240,4 +270,4 @@ def create_dataloaders(all_ticker_data, train_start, train_end, test_start=None,
         test_dataset = TensorDataset(X_test_t, y_test_t)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_loader, test_loader, n_steps, len(feature_cols), y_test_eval, scaler_dict
+    return train_loader, val_loader, test_loader, n_steps, len(feature_cols), y_test_eval, scaler_dict
